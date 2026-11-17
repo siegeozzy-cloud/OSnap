@@ -1,0 +1,3 @@
+#include "Generated.xcconfig"
+// Required by ML Kit text recognition (Swift Package Manager build).
+OTHER_LDFLAGS=$(inherited) -ObjC -all_load
