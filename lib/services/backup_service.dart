@@ -75,12 +75,22 @@ class BackupService {
       return s.contains(RegExp(r'[",\n]')) ? '"${s.replaceAll('"', '""')}"' : s;
     }
 
-    String money(int? cents) => cents == null ? '' : (cents / 100).toStringAsFixed(2);
+    String money(int? cents) =>
+        cents == null ? '' : (cents / 100).toStringAsFixed(2);
 
     final rows = <List<Object?>>[
       [
-        'date', 'title', 'note', 'item', 'product', 'qty', 'pieces_per_pack',
-        'total', 'per_piece', 'markup', 'marked_up_price',
+        'date',
+        'title',
+        'note',
+        'item',
+        'product',
+        'qty',
+        'pieces_per_pack',
+        'total',
+        'per_piece',
+        'markup',
+        'marked_up_price',
       ],
       for (final e in await db.allEntries())
         [
@@ -99,9 +109,7 @@ class BackupService {
     ];
     final tmp = await getTemporaryDirectory();
     final file = File(p.join(tmp.path, 'osnap-${_stamp()}.csv'));
-    await file.writeAsString(
-      rows.map((r) => r.map(cell).join(',')).join('\n'),
-    );
+    await file.writeAsString(rows.map((r) => r.map(cell).join(',')).join('\n'));
     return file;
   }
 }

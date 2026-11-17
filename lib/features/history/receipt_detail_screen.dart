@@ -47,43 +47,51 @@ class ReceiptDetailScreen extends ConsumerWidget {
         icon: const Icon(Icons.add),
         label: const Text('Add item'),
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
-        children: [
-          ReceiptImage(file: imageFileFor(ref, receipt.imageName)),
-          const SizedBox(height: 12),
-          Text(
-            fmtDateTime(receipt.capturedAt),
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
+      body: ScrollJump(
+        // Clear the "Add item" button.
+        bottomInset: 88,
+        builder: (scroll) => ListView(
+          controller: scroll,
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+          children: [
+            ReceiptImages(files: imageFilesFor(ref, receipt)),
+            const SizedBox(height: 12),
+            Text(
+              fmtDateTime(receipt.capturedAt),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
             ),
-          ),
-          if (note.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(note, style: theme.textTheme.bodyLarge),
-          ],
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Items (${items.length})',
+            if (note.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(note, style: theme.textTheme.bodyLarge),
+            ],
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Items (${items.length})',
+                    style: theme.textTheme.titleMedium,
+                  ),
+                ),
+                Text(
+                  'Total ${peso(total)}',
                   style: theme.textTheme.titleMedium,
                 ),
-              ),
-              Text('Total ${peso(total)}', style: theme.textTheme.titleMedium),
-            ],
-          ),
-          if (items.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: Text(
-                'No items on this receipt.',
-                style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
-              ),
+              ],
             ),
-          for (final e in items) _ItemCard(entry: e, all: entries),
-        ],
+            if (items.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Text(
+                  'No items on this receipt.',
+                  style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+                ),
+              ),
+            for (final e in items) _ItemCard(entry: e, all: entries),
+          ],
+        ),
       ),
     );
   }
@@ -92,13 +100,16 @@ class ReceiptDetailScreen extends ConsumerWidget {
     final ok = await confirm(
       context,
       title: 'Delete this receipt?',
-      message: 'The photo, note and items will be removed. This cannot be undone.',
+      message:
+          'The photo, note and items will be removed. This cannot be undone.',
       action: 'Delete',
     );
     if (!ok) return;
-    final file = imageFileFor(ref, r.imageName);
+    final files = imageFilesFor(ref, r);
     await ref.read(dbProvider).deleteReceipt(r.id);
-    if (await file.exists()) await file.delete();
+    for (final file in files) {
+      if (await file.exists()) await file.delete();
+    }
     if (context.mounted) Navigator.of(context).pop();
   }
 
@@ -118,14 +129,18 @@ class ReceiptDetailScreen extends ConsumerWidget {
                 TextField(
                   controller: title,
                   textCapitalization: TextCapitalization.sentences,
-                  decoration: const InputDecoration(labelText: 'Title (optional)'),
+                  decoration: const InputDecoration(
+                    labelText: 'Title (optional)',
+                  ),
                 ),
                 TextField(
                   controller: note,
                   textCapitalization: TextCapitalization.sentences,
                   minLines: 1,
                   maxLines: 4,
-                  decoration: const InputDecoration(labelText: 'Note (optional)'),
+                  decoration: const InputDecoration(
+                    labelText: 'Note (optional)',
+                  ),
                 ),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
@@ -287,8 +302,7 @@ class _ItemCard extends ConsumerWidget {
     final prev = previousPurchase(all, entry);
     final item = entry.item;
     final linkedName = entry.product.displayName;
-    final showLinked =
-        normalizeName(linkedName) != normalizeName(item.rawName);
+    final showLinked = normalizeName(linkedName) != normalizeName(item.rawName);
 
     Widget row(String label, String value, {bool strong = false}) => Padding(
       padding: const EdgeInsets.only(top: 4),
@@ -338,9 +352,8 @@ class _ItemCard extends ConsumerWidget {
                     icon: const Icon(Icons.show_chart),
                     onPressed: () => Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (_) => ProductHistoryScreen(
-                          productId: entry.product.id,
-                        ),
+                        builder: (_) =>
+                            ProductHistoryScreen(productId: entry.product.id),
                       ),
                     ),
                   ),

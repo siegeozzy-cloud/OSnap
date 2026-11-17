@@ -31,14 +31,17 @@ final entriesProvider = StreamProvider<List<Entry>>(
 File imageFileFor(WidgetRef ref, String imageName) =>
     File(p.join(ref.read(imagesDirProvider).path, imageName));
 
+List<File> imageFilesFor(WidgetRef ref, Receipt r) => [
+  for (final name in imageNamesOf(r)) imageFileFor(ref, name),
+];
+
 /// The purchase of the same product just before [entry], if any.
 /// [entries] must be oldest first.
 Entry? previousPurchase(List<Entry> entries, Entry entry) {
   Entry? prev;
   for (final e in entries) {
     if (e.item.id == entry.item.id) break;
-    if (e.product.id == entry.product.id &&
-        e.receipt.id != entry.receipt.id) {
+    if (e.product.id == entry.product.id && e.receipt.id != entry.receipt.id) {
       prev = e;
     }
   }

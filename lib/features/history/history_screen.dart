@@ -95,7 +95,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
       leading: ClipRRect(
         borderRadius: BorderRadius.circular(8),
         child: Image.file(
-          imageFileFor(ref, r.imageName),
+          imageFilesFor(ref, r).first,
           width: 48,
           height: 48,
           fit: BoxFit.cover,
@@ -120,9 +120,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
       isThreeLine: lines.length > 1,
       trailing: const Icon(Icons.chevron_right),
       onTap: () => Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => ReceiptDetailScreen(receiptId: r.id),
-        ),
+        MaterialPageRoute(builder: (_) => ReceiptDetailScreen(receiptId: r.id)),
       ),
     );
   }

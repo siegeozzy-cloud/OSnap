@@ -101,8 +101,7 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
             '${peso(latest.unitCents)}/pc',
             style: Theme.of(context).textTheme.titleMedium,
           ),
-          if (latest.sellCents != null)
-            Text('Sell ${peso(latest.sellCents!)}'),
+          if (latest.sellCents != null) Text('Sell ${peso(latest.sellCents!)}'),
         ],
       ),
       onTap: () => Navigator.of(context).push(

@@ -12,8 +12,24 @@ import '../../services/ocr_service.dart';
 import '../../services/receipt_parser.dart';
 import 'review_screen.dart';
 
-/// Camera or gallery -> save the photo -> read the text -> review screen.
-Future<void> startScan(BuildContext context, WidgetRef ref) async {
+/// One photo of a receipt (or of one part of a long receipt) and what the
+/// scanner read from it.
+class Shot {
+  Shot({
+    required this.imageName,
+    required this.capturedAt,
+    required this.rows,
+    required this.parsed,
+  });
+  final String imageName;
+  final DateTime capturedAt;
+  final List<String> rows;
+  final ParsedReceipt parsed;
+}
+
+/// Camera or gallery -> save the photo in the app folder -> read the text.
+/// Returns null if the user cancels.
+Future<Shot?> captureShot(BuildContext context, WidgetRef ref) async {
   final source = await showModalBottomSheet<ImageSource>(
     context: context,
     showDragHandle: true,
@@ -35,7 +51,7 @@ Future<void> startScan(BuildContext context, WidgetRef ref) async {
       ),
     ),
   );
-  if (source == null) return;
+  if (source == null) return null;
 
   final XFile? picked;
   try {
@@ -46,9 +62,9 @@ Future<void> startScan(BuildContext context, WidgetRef ref) async {
     );
   } catch (e) {
     if (context.mounted) showMessage(context, 'Could not open the camera: $e');
-    return;
+    return null;
   }
-  if (picked == null || !context.mounted) return;
+  if (picked == null || !context.mounted) return null;
 
   showDialog<void>(
     context: context,
@@ -71,28 +87,34 @@ Future<void> startScan(BuildContext context, WidgetRef ref) async {
   }
 
   var rows = <String>[];
-  String? ocrError;
+  var ocrFailed = false;
   try {
     rows = (await OcrService().recognize(file.path)).rows;
-  } catch (e) {
-    ocrError = '$e';
+  } catch (_) {
+    ocrFailed = true;
   }
-  final parsed = parseReceipt(rows);
 
-  if (!context.mounted) return;
+  if (!context.mounted) return null;
   Navigator.of(context).pop(); // progress dialog
-  if (ocrError != null) {
-    showMessage(context, 'Could not read text from the photo. Add items by hand.');
+  if (ocrFailed) {
+    showMessage(
+      context,
+      'Could not read text from the photo. Add items by hand.',
+    );
   }
-  await Navigator.of(context).push(
-    MaterialPageRoute(
-      builder: (_) => ReviewScreen(
-        imageName: imageName,
-        capturedAt: capturedAt,
-        receiptDate: parsed.date,
-        rawText: rows.join('\n'),
-        items: parsed.items,
-      ),
-    ),
+  return Shot(
+    imageName: imageName,
+    capturedAt: capturedAt,
+    rows: rows,
+    parsed: parseReceipt(rows),
   );
+}
+
+/// First photo of a new receipt, then the review screen. More photos of the
+/// same receipt can be added there.
+Future<void> startScan(BuildContext context, WidgetRef ref) async {
+  final shot = await captureShot(context, ref);
+  if (shot == null || !context.mounted) return;
+  await Navigator.of(context)
+      .push(MaterialPageRoute(builder: (_) => ReviewScreen(first: shot)));
 }

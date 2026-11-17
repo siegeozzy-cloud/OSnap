@@ -17,9 +17,10 @@ class OcrService {
       final result = await recognizer.processImage(
         InputImage.fromFilePath(imagePath),
       );
-      final lines = [
-        for (final block in result.blocks) ...block.lines,
-      ]..sort((a, b) => a.boundingBox.center.dy.compareTo(b.boundingBox.center.dy));
+      final lines = [for (final block in result.blocks) ...block.lines]
+        ..sort(
+          (a, b) => a.boundingBox.center.dy.compareTo(b.boundingBox.center.dy),
+        );
 
       // ML Kit returns the name and the price of one receipt row as separate
       // lines. Lines whose vertical centres are close belong to the same row.
@@ -38,7 +39,9 @@ class OcrService {
       }
       return OcrResult([
         for (final row in rows)
-          (row..sort((a, b) => a.boundingBox.left.compareTo(b.boundingBox.left)))
+          (row..sort(
+                (a, b) => a.boundingBox.left.compareTo(b.boundingBox.left),
+              ))
               .map((l) => l.text)
               .join(' '),
       ]);

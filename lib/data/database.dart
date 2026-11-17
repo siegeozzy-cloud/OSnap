@@ -2,6 +2,7 @@ import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 
 import '../core/format.dart';
+import '../services/receipt_parser.dart' show cleanItemName;
 
 part 'database.g.dart';
 
@@ -10,8 +11,10 @@ class Receipts extends Table {
   TextColumn get title => text().nullable()();
   TextColumn get note => text().nullable()();
 
-  /// File name only. The file lives in the app's `receipts/` folder; the
-  /// absolute path is not stored because iOS changes it between installs.
+  /// Photo file name(s). A long receipt shot in several photos stores them
+  /// top to bottom, joined with "|" (see [imageNamesOf]). Files live in the
+  /// app's `receipts/` folder; the absolute path is not stored because iOS
+  /// changes it between installs.
   TextColumn get imageName => text()();
   DateTimeColumn get capturedAt => dateTime()();
   TextColumn get rawOcrText => text().withDefault(const Constant(''))();
@@ -86,6 +89,9 @@ class NewItem {
   final int? productId;
 }
 
+/// The photos of a receipt, top to bottom.
+List<String> imageNamesOf(Receipt r) => r.imageName.split('|');
+
 String receiptLabel(Receipt r) {
   final t = r.title?.trim() ?? '';
   return t.isNotEmpty ? t : fmtDateTime(r.capturedAt);
@@ -97,7 +103,7 @@ class AppDatabase extends _$AppDatabase {
     : super(executor ?? driftDatabase(name: 'osnap'));
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -106,6 +112,8 @@ class AppDatabase extends _$AppDatabase {
     },
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');
+      final before = details.versionBefore;
+      if (before != null && before < 3) await shortenProductNames();
     },
   );
 
@@ -140,9 +148,9 @@ class AppDatabase extends _$AppDatabase {
   Future<List<Entry>> allEntries() async =>
       (await _entriesQuery().get()).map(_toEntry).toList();
 
-  Future<List<Product>> allProducts() =>
-      (select(products)..orderBy([(p) => OrderingTerm.asc(p.displayName)]))
-          .get();
+  Future<List<Product>> allProducts() => (select(
+    products,
+  )..orderBy([(p) => OrderingTerm.asc(p.displayName)])).get();
 
   /// Pack size last used for each product, keyed by normalised name, so a
   /// repeat scan of the same item starts with the same choice.
@@ -296,8 +304,9 @@ class AppDatabase extends _$AppDatabase {
     final display = name.trim();
     final norm = normalizeName(display);
     final clash =
-        await (select(products)
-              ..where((p) => p.normalizedName.equals(norm) & p.id.isNotValue(id)))
+        await (select(products)..where(
+              (p) => p.normalizedName.equals(norm) & p.id.isNotValue(id),
+            ))
             .getSingleOrNull();
     if (clash != null) return false;
     await (update(products)..where((p) => p.id.equals(id))).write(
@@ -308,6 +317,39 @@ class AppDatabase extends _$AppDatabase {
     );
     return true;
   }
+
+  /// Renames products saved before names were cut at the weight
+  /// ("LM CHILIMANSI 80GX72" -> "LM CHILIMANSI 80G"). Products that end up
+  /// with the same name are merged, keeping all their price history.
+  Future<void> shortenProductNames() => transaction(() async {
+    final all = await (select(
+      products,
+    )..orderBy([(p) => OrderingTerm.asc(p.id)])).get();
+    final keepByNorm = <String, int>{
+      for (final p in all) p.normalizedName: p.id,
+    };
+    for (final p in all) {
+      final display = cleanItemName(p.displayName);
+      final norm = normalizeName(display);
+      if (norm.isEmpty || norm == p.normalizedName) continue;
+      final keep = keepByNorm[norm];
+      if (keep != null && keep != p.id) {
+        await (update(lineItems)..where((i) => i.productId.equals(p.id))).write(
+          LineItemsCompanion(productId: Value(keep)),
+        );
+        await (delete(products)..where((x) => x.id.equals(p.id))).go();
+      } else {
+        await (update(products)..where((x) => x.id.equals(p.id))).write(
+          ProductsCompanion(
+            displayName: Value(display),
+            normalizedName: Value(norm),
+          ),
+        );
+        keepByNorm[norm] = p.id;
+      }
+      keepByNorm.remove(p.normalizedName);
+    }
+  });
 
   Future<void> _deleteOrphanProducts() => customUpdate(
     'DELETE FROM products WHERE id NOT IN '
